@@ -1,0 +1,87 @@
+\appendix
+\section{Appendix}
+\subsubsection{Reinforcement Learning Overview}
+Reinforcement learning (RL) models sequential decision making as a Markov decision process (MDP) $(\mathcal{S}, \mathcal{A}, p, r, \gamma)$. At each time step $t$, the agent observes a state $s_t \in \mathcal{S}$, selects an action $a_t \in \mathcal{A}$ according to a policy $\pi_\theta(a_t \mid s_t)$, receives a scalar reward $r_t = r(s_t, a_t)$, and the environment transitions to $s_{t+1} \sim p(\cdot \mid s_t, a_t)$. The objective is to find policy parameters $\theta$ that maximize the expected discounted return
+\[
+J(\theta) = \mathbb{E}_{\pi_\theta} \Bigg[ \sum_{t=0}^{\infty} \gamma^t r_t \Bigg],
+\]
+where $\gamma \in (0,1]$ is the discount factor. For a fixed policy $\pi$, the state-value function and action-value function are
+\[
+V^\pi(s) = \mathbb{E}_\pi \big[ \sum_{t=0}^{\infty} \gamma^t r_t \mid s_0 = s \big], 
+\qquad
+Q^\pi(s,a) = \mathbb{E}_\pi \big[ \sum_{t=0}^{\infty} \gamma^t r_t \mid s_0 = s, a_0 = a \big],
+\]
+and they satisfy the Bellman expectation equation
+\[
+V^\pi(s) = \sum_{a} \pi(a \mid s) \sum_{s'} p(s' \mid s, a) \big[ r(s,a) + \gamma V^\pi(s') \big].
+\]
+The advantage function is defined as
+\[
+A^\pi(s,a) = Q^\pi(s,a) - V^\pi(s),
+\]
+and measures how much better action $a$ is compared to the average action at state $s$.
+
+\paragraph{Policy gradient principle.}
+For differentiable policies $\pi_\theta(a \mid s)$, the policy gradient theorem gives
+\[
+\nabla_\theta J(\theta) = \mathbb{E}_{s \sim d^\pi, a \sim \pi_\theta} \big[ \nabla_\theta \log \pi_\theta(a \mid s) \, Q^\pi(s,a) \big],
+\]
+and in practice we replace $Q^\pi(s,a)$ by an advantage estimate $\hat A_t$, leading to the classic REINFORCE-style update
+\[
+\theta \leftarrow \theta + \alpha \, \hat A_t \, \nabla_\theta \log \pi_\theta(a_t \mid s_t).
+\]
+Most modern RL methods (PPO, GRPO, and their variants) can be viewed as safer or more sample-efficient ways of performing this update.
+
+\paragraph{Proximal Policy Optimization (PPO).}
+PPO \cite{schulman2017proximalpolicyoptimizationalgorithms} stabilizes policy gradients by preventing excessively large policy updates. Let
+\[
+r_t(\theta) = \frac{\pi_\theta(a_t \mid s_t)}{\pi_{\theta_{\text{old}}}(a_t \mid s_t)}
+\]
+be the probability ratio between the new and the behavior policy. Let $\hat A_t$ be an advantage estimate (e.g., GAE). PPO maximizes the clipped surrogate objective
+\[
+L^{\text{PPO}}(\theta) = \mathbb{E}_t \bigg[ \min\big( r_t(\theta) \hat A_t,\; \operatorname{clip}(r_t(\theta), 1 - \epsilon, 1 + \epsilon) \hat A_t \big) \bigg],
+\]
+where $\epsilon$ is a small hyperparameter (e.g., $0.1$ or $0.2$). The $\min(\cdot)$ and the clipping together act as a trust region in probability space, so that even if $\hat A_t$ is large, the policy will not move too far away from $\pi_{\theta_{\text{old}}}$ in a single update.
+
+\paragraph{Group Relative Policy Optimization (GRPO).}
+Recent LLM-oriented RL work observes that when many responses can be sampled for the same prompt, we can estimate advantages without a separate value network. GRPO forms a group $\mathcal{G} = \{r_1, \dots, r_N\}$ of rollouts for the same input, scores them with a reward model $R_\phi(\cdot)$, and then normalizes within the group:
+\[
+A_i = \frac{R_\phi(r_i) - \operatorname{mean}(\mathcal{G})}{\operatorname{std}(\mathcal{G})}.
+\]
+This gives a critic-free advantage estimate. GRPO then uses essentially the same clipped PPO-style loss
+\[
+L^{\text{GRPO}}(\theta) = \frac{1}{N} \sum_{i=1}^{N}
+\min \bigg(
+\frac{\pi_\theta(r_i \mid x)}{\pi_{\theta_{\text{old}}}(r_i \mid x)} A_i,
+\operatorname{clip}\Big(\frac{\pi_\theta(r_i \mid x)}{\pi_{\theta_{\text{old}}}(r_i \mid x)}, 1 - \epsilon, 1 + \epsilon \Big) A_i
+\bigg)
+ - \lambda \, D_{\mathrm{KL}}\big(\pi_\theta \,\|\, \pi_{\text{ref}}\big),
+\]
+where the KL term keeps the updated policy close to a reference model (often the SFT model). Compared to PPO, the key differences are: (i) advantages come from groupwise normalization, not a learned value function; (ii) the method is well suited to large-batch LLM training where many samples per prompt are available.
+
+\paragraph{Group-in-Group Policy Optimization (GiGPO).}
+Very recent work on training LLM agents in multi-step environments argues that a single group-level relative advantage (as in GRPO) is not enough, because the reward can be sparse and credit assignment needs to happen both at the trajectory level and at individual steps. GiGPO \cite{feng2025groupingrouppolicyoptimizationllm} introduces a two-level grouping:
+\begin{itemize}
+  \item at the episode level, sample multiple full trajectories for the same task and compute a macro relative advantage (similar to GRPO);
+  \item at the step level, retroactively group actions that occurred in the same environment state (called anchor states) across different trajectories, and compute a micro relative advantage for those actions.
+\end{itemize}
+This yields fine-grained credit signals without introducing a value network. Conceptually, GiGPO keeps the good parts of GRPO (critic-free, low memory, PPO-like clipping) but adds an extra axis of grouping so that actions that happened at the same state can be compared directly. This is particularly attractive for long-horizon urban/traffic tasks or LLM agents, where the effect of a single bad action might only become visible many steps later.
+
+\subsubsection{Traffic Signal Control}
+
+\paragraph{General overview.}
+Traffic signal control (TSC) aims to coordinate phase sequences and durations at signalized intersections to maximize throughput and reduce congestion. Classical fixed-time methods use the Webster formula\cite{webster} to preset signal timings based on historical traffic data collected from the traffic network at different
+times. In contrast, the max-pressure control framework\cite{MERCADER2020275} computes a pressure value for each signal phase from the difference between queue lengths on opposing approaches and selects the phase with the highest pressure; this strategy can be shown to maximize network throughput. Reinforcement-learning (RL) methods model TSC as a Markov decision process in which an agent observes traffic states (for example, lane queue lengths and delays), chooses an action (phase switch) and receives a reward linked to throughput or delay reduction. CoLight\cite{10.1145/3357384.3357902} learns network-level cooperation by letting intersections communicate through graph attention, so signals can coordinate beyond immediate neighbors. CoSLight\cite{ruan2024coslightcooptimizingcollaboratorselection} extends this idea by learning not only the signal policy but also which intersections should collaborate at each moment, improving multi-intersection coordination under changing congestion patterns. MPLight\cite{Chen_Wei_Xu_Zheng_Yang_Xiong_Xu_Li_2020} is a decentralized, pressure-aware RL variant built to run efficiently in large CityFlow\cite{tang2019cityflowcityscalebenchmarkmultitarget}-style networks, using parameter sharing to keep city-scale control tractable. Despite achieving competitive performance in simulation, many RL-based controllers suffer from poor cross-city generalization and lack interpretability, motivating recent research into interpretable and generalizable TSC agents.
+
+\paragraph{CityFlow environment.}
+A key enabler for modern RL research on TSC is the availability of scalable simulators. SUMO\cite{SUMO2018}, the traditional open-source traffic simulator, is often too slow for city-scale RL experiments. CityFlow\cite{tang2019cityflowcityscalebenchmarkmultitarget} is a multi-agent microscopic traffic simulator designed for large-scale RL studies. It provides flexible definitions of road networks and traffic flows from both synthetic and real-world data and exposes a user-friendly API for interaction with RL agents. CityFlow's multithreaded design makes it more than twenty times faster than SUMO, enabling efficient simulation of networks with hundreds or thousands of intersections. Because of its speed and extensibility, CityFlow has become a standard environment for evaluating RL-based TSC algorithms.
+
+\paragraph{\textit{LLMLight}: Large language models as TSC agents.}
+The \textit{LLMLight}\cite{lai2024llmlightlargelanguagemodels} framework treats traffic signal control as a partially observable Markov game and leverages large language models (LLMs) to serve as decision-making agents. At each signal switch, an agent collects observation features such as the number of queuing vehicles and approaching vehicles on each incoming lane, augments this information with a traffic scenario description, a task description and a commonsense knowledge prompt that encourages the agent to prioritize long queues, and feeds the combined text to an LLM. The LLM performs chain-of-thought reasoning to decide which phase to activate and provides a human-readable rationale. \textit{LLMLight} constructs a specialized backbone model called LightGPT via imitation fine-tuning on GPT-4 trajectories and critic-guided policy refinement. During imitation, the model minimizes the negative log-likelihood
+\begin{equation*}
+\mathcal{L}_{\mathrm{NLL}} = - \sum_{t=1}^{T} \log p_\theta \bigl( y_t \mid y_{<t}, \pi, \mathcal{P} \bigr),
+\end{equation*}
+where $\pi$ is the prompt consisting of observation and commonsense instructions and $\mathcal{P}$ denotes the reasoning trajectory. A critic model derived from an action-value network evaluates sampled trajectories, and a ranking-based loss steers the model toward trajectories with higher long-term rewards. Experimental results show that \textit{LLMLight} with LightGPT achieves competitive or superior performance and provides better interpretability compared with traditional RL baselines across diverse traffic scenarios. It provides a reproducible workflow that integrates CityFlow with RL-based fine-tuning of LLMs (though implemented in TensorFlow) and datasets ready for use.
+
+\paragraph{\textit{Traffic-R1}: Reinforced LLMs for human-like TSC.}
+\textit{Traffic-R1}\cite{zou2025trafficr1reinforcedllmsbring} is a 3B foundation model trained to perform traffic signal control with human-like reasoning. It adopts a two-stage reinforcement-learning fine-tuning paradigm: an offline stage aligns the model with question-answer (QA) samples (generated by DeepSeek-R1 and verified by human experts), and an online stage allows self-exploration in simulation to refine the policy via reward feedback. The reward is calculated from the cumulative queuing time after multiple steps, and each step only half of the agents are activated, whose decisions are propagated to neighboring agents as an input. This mimics an asynchronous communication network allows multiple agents to coordinate across intersections. Benchmark results report that \textit{Traffic-R1} offers zero-shot generalization to unseen road networks and out-of-distribution incidents, outperforming both classical heuristics and RL controllers. When deployed in production, \textit{Traffic-R1} manages signals affecting more than 55,000 drivers each day, reducing average queue lengths by over 5\% and significantly lowering operator workload. Though without a codebase, \textit{Traffic-R1} provides insights into using SOTA RL algorithms like GRPO to train TSC agents, as well as the innovative idea of mimicking the real world scenario with a asynchronous mult-agent setup.
