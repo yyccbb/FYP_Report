@@ -1,0 +1,44 @@
+# macOS and editor cruft
+.DS_Store
+.vscode/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.glg
+*.glo
+*.gls
+*.idx
+*.ilg
+*.ind
+*.lof
+*.log
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+*.vrb
+*.xdv
+
+# Bibliography, glossary, and package-specific artifacts
+*.acn
+*.acr
+*.alg
+*.loa
+*.lol
+*.maf
+*.mtc*
+*.pyg
+_minted*/
+
+# Alternate output directories
+build/
+out/
+

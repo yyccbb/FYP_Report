@@ -1,0 +1,99 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[USenglish]{babel}
+\usepackage{setspace}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath, amssymb}
+\usepackage{hyperref}
+\usepackage{csquotes}
+\usepackage[backend=biber,style=numeric, sorting=nty]{biblatex}
+\usepackage{titlesec}
+\usepackage{booktabs}
+\usepackage[labelfont=bf, textfont=bf]{caption}
+
+% ---------- Bibliography ----------
+\addbibresource{references.bib} % Place your references in a file named references.bib
+
+% ---------- Page & Formatting ----------
+\geometry{margin=1in}
+\setstretch{1}
+% \titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+
+\graphicspath{{./images/}}
+
+% ---------- Document ----------
+\def\projecttitle{DQN-Guided GRPO Fine-tuning of Traffic Signal Control Agent}
+\begin{document}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.5em}
+
+% ---------- Front Cover ----------
+\begin{center}
+    \vspace*{\fill}
+
+    {\Large B.Comp. Dissertation}
+    \vspace{4cm}
+
+    {\Huge \textbf{\projecttitle} \par}
+
+    \vspace{2cm}
+
+    {\Large Yu Chenbo\par}
+    \vspace{4cm}
+
+    {\large Department of Computer Science\par}
+    {\large School of Computing\par}
+    {\large National University of Singapore\par}
+    \vspace{1cm}
+
+    {\large 2025/2026}
+    \vspace*{\fill}
+\end{center}
+\newpage
+
+% ---------- Title Page ----------
+\begin{titlepage}
+    \centering
+    \includegraphics[width=0.8\linewidth]{nus_logo.jpg}\\
+    {\Large B.Comp. Dissertation \par}
+    {\LARGE \textbf{\projecttitle} \par}
+    \vspace{2cm}
+
+    {\large Yu Chenbo\par}
+    \vspace{2cm}
+
+    {\large Department of Computer Science\par}
+    {\large School of Computing\par}
+    {\large National University of Singapore\par}
+    {\large 2025/2026}
+    \vspace{1cm}
+
+    \raggedright
+    {\textbf{Project No:} H118280\par}
+    {\textbf{Advisor:} Prof. Roger Zimmermann\par}
+    {\textbf{Main Evaluator:} Assoc. Prof. Aaron Tan Tuck Choy\par}
+    {\textbf{Deliverables:}\\}
+    {\hspace{1cm}Report: 1 Volume\\}
+    {\hspace{1cm}Program: 1 Codebase}
+
+\end{titlepage}
+
+% ---------- Abstract Page ----------
+\input{sections/abstract.tex}
+% ---------- Content Page ----------
+\input{sections/table_of_contents.tex}
+
+% ---------- Main Paper ----------
+\input{sections/1_introduction.tex}
+\input{sections/2_related_work.tex}
+\input{sections/3_preliminaries.tex}
+\input{sections/4_methodology.tex}
+
+% ---------- Section 5 ----------
+\section{References}
+\printbibliography
+
+\end{document}
