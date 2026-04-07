@@ -73,12 +73,14 @@ a_{i,t}^{(j)} = \operatorname{Parse}(y_{i,t}^{(j)}), \qquad j = 1, \dots, k.
 \]
 If the response fails to specify a valid action in the predefined action space, it is treated as an invalid output and assigned a fallback reward during training. This allows the method to preserve free-form reasoning generation while still enforcing a discrete control interface at execution time.
 
-\subsection{DQN-Guided Action Scoring}
-The central idea of \textit{DGLight} is to replace coarse trajectory-level rewards with direct action-level evaluation from the pretrained DQN critic. For the current traffic state at intersection $i$, the frozen critic produces a vector of estimated returns over all admissible signal phases:
+\subsection{DQN-Guided Action Scoring in Rollout Collection}
+The central idea of \textit{DGLight} is to replace discounted raw environment rewards with action value estimates from the pretrained DQN critic.
+
+\textbf{Stepwise action value assignment.} For the current traffic state at intersection $i$, the frozen critic produces a vector of estimated returns over all admissible signal phases:
 \[
 \mathbf{q}_{i,t} = \bigl[ Q_\phi(s_{i,t}, a) \bigr]_{a \in A},
 \]
-where $s_{i,t}$ is the structured traffic state and $Q_\phi$ is the pretrained DQN critic. The critic therefore acts as a traffic-aware evaluator that maps the current state to a dense preference ordering over actions.
+where $s_{i,t}$ is the structured traffic state and $Q_\phi$ is the pretrained DQN critic. The critic therefore acts as a traffic-aware evaluator that maps the current state to a vector of action values that reflect both spatial and temporal traffic context.
 
 Each sampled LLM response is scored by the critic through its parsed action:
 \[
@@ -88,7 +90,9 @@ Q_\phi\!\left(s_{i,t}, a_{i,t}^{(j)}\right), & \text{if } a_{i,t}^{(j)} \in A, \
 r_{\mathrm{invalid}}, & \text{otherwise},
 \end{cases}
 \]
-where $r_{\mathrm{invalid}}$ is a fixed fallback reward for malformed or out-of-range decisions. Among the sampled candidates, the action actually executed in the environment is the highest-scoring sampled action,
+where $r_{\mathrm{invalid}}$ is a fixed fallback reward for malformed or out-of-range decisions. 
+
+\textbf{Environment stepping.} Among the sampled candidates, the action actually executed in the environment is the highest-scoring sampled action,
 \[
 j_{i,t}^{*} = \arg\max_{j \in \{1,\dots,k\}} r_{i,t}^{(j)},
 \qquad
@@ -96,7 +100,7 @@ j_{i,t}^{*} = \arg\max_{j \in \{1,\dots,k\}} r_{i,t}^{(j)},
 \]
 Thus, the environment rollout is still driven by sampled LLM outputs, but execution is guided by the critic's action-value estimate.
 
-This design yields two methodological advantages. First, the reward signal is dense: every sampled response receives an immediate action-specific score rather than waiting for a sparse terminal outcome. Second, the reward is directly aligned with the control decision itself, since the model is encouraged to generate reasoning trajectories whose final answer corresponds to a high-value traffic action. Compared with fixed-horizon cumulative congestion rewards, this provides finer credit assignment at each decision step. Compared with ranking-style refinement objectives, the magnitude of the action preference directly influences the GRPO update.
+This design has a major advantage that the critic-derived reward incorporates richer spatial and temporal information than short-horizon cumulative rewards computed directly from the environment. Because the CoLight-based critic aggregates information from neighboring intersections through graph attention and is trained with Bellman backups under a discount factor, $Q_\phi(s_{i,t}, a)$ reflects both network interactions and the expected downstream consequences of choosing action $a$. 
 
 \subsection{GRPO-Based Policy Optimization}
 After rollout collection, each intersection-step pair contributes a training record consisting of the prompt and the full critic score vector,
