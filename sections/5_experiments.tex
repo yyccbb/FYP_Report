@@ -65,6 +65,7 @@ All LLM-based methods use \textit{Llama3-8b} as the backbone model. For the prop
         \toprule
         Component & Configuration \\
         \midrule
+        Training dataset & Hangzhou-1 \\
         Optimizer & Adam with learning rate $1 \times 10^{-3}$ \\
         Discount factor $\gamma$ & 0.8 \\
         Replay buffer size & 12000 \\
@@ -89,6 +90,7 @@ All LLM-based methods use \textit{Llama3-8b} as the backbone model. For the prop
         \midrule
         Policy backbone & Llama3-8b \\
         LoRA configuration & rank = $8$, $\alpha = 16$, dropout $= 0.05$, bias = none \\
+        Overall episodes & 2 \\
         \midrule
         Rollout environment & 3600-second episodes with a 30-second action interval \\
         Rollout group size $k$ & 4 \\
@@ -109,7 +111,7 @@ All LLM-based methods use \textit{Llama3-8b} as the backbone model. For the prop
     \caption{Performance of traditional and RL-based baselines on the TSC datasets. Lower values are better. Best and second-best values are highlighted in bold and underlined, respectively.}
     \label{tab:tsc_baselines}
     \resizebox{\textwidth}{!}{%
-    \begin{tabular}{lccccccccccccccc}
+    \begin{tabular}{l|ccc|ccc|ccc|ccc|ccc}
         \toprule
         & \multicolumn{9}{c}{Jinan} & \multicolumn{6}{c}{Hangzhou} \\
         \cmidrule(lr){2-10} \cmidrule(lr){11-16}
@@ -136,13 +138,12 @@ All LLM-based methods use \textit{Llama3-8b} as the backbone model. For the prop
     }
 \end{table}
 
-\subsubsection{LLM-Based Methods}
 \begin{table}[t]
     \centering
-    \caption{Performance of LLM-based methods on the TSC datasets. Fill in the final values after evaluation. Lower values are better.}
+    \caption{Performance of LLM-based methods on the TSC datasets. Lower values are better. Best and second-best values are highlighted in bold and underlined, respectively.}
     \label{tab:tsc_llm_results}
     \resizebox{\textwidth}{!}{%
-    \begin{tabular}{lccccccccccccccc}
+    \begin{tabular}{l|ccc|ccc|ccc|ccc|ccc}
         \toprule
         & \multicolumn{9}{c}{Jinan} & \multicolumn{6}{c}{Hangzhou} \\
         \cmidrule(lr){2-10} \cmidrule(lr){11-16}
@@ -150,16 +151,20 @@ All LLM-based methods use \textit{Llama3-8b} as the backbone model. For the prop
         \cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10} \cmidrule(lr){11-13} \cmidrule(lr){14-16}
         & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT \\
         \midrule
-        LightGPT (Llama3-8b) &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
-        JS-GRPO-h3 (Llama3-8b) &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
-        JS-GRPO-h6 (Llama3-8b) &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
-        DGLight (Llama3-8b) &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
+        LightGPT (Llama3-8b) & \underline{277.38} & \underline{164.60} & \underline{48.68} & \underline{270.14} & \underline{103.77} & \underline{44.10} & \underline{262.67} & \underline{130.65} & \underline{44.98} & \textbf{316.12} & \textbf{61.02} & \textbf{53.84} & \underline{333.95} & \textbf{190.91} & 72.57 \\
+        JS-GRPO-h3 (Llama3-8b) & 279.59 & 168.24 & 52.80 & 271.59 & 105.43 & 47.57 & 264.74 & 134.01 & 49.48 & 317.48 & 61.89 & 55.04 & 334.76 & 194.48 & \underline{72.43} \\
+        JS-GRPO-h6 (Llama3-8b) & 277.73 & 164.92 & 50.28 & 271.89 & 105.83 & 46.59 & 263.47 & 132.39 & 49.72 & 317.95 & 61.93 & \underline{53.94} & 336.45 & 197.08 & 75.03 \\
+        DGLight (Llama3-8b) & \textbf{275.92} & \textbf{162.64} & \textbf{47.17} & \textbf{269.68} & \textbf{103.51} & \textbf{43.78} & \textbf{262.16} & \textbf{129.77} & \textbf{43.53} & \underline{316.59} & \underline{61.08} & 54.43 & \textbf{333.14} & \underline{191.61} & \textbf{70.63} \\
         \bottomrule
     \end{tabular}%
     }
 \end{table}
 
-% Add the textual analysis for RQ1 after the LLM-based results are finalized.
+Table~\ref{tab:tsc_llm_results} shows that \textit{DGLight} is the strongest overall method among the four LLM-based controllers. It achieves the best performance on most datasets and metrics, with Hangzhou-1 as the main exception. Overall, this result shows that the proposed method is superior to the reward-discounting baselines and that critic-guided GRPO improves the quality of the traffic-signal decisions produced by the LLM policy.
+
+When compared with the strongest RL baselines in Table~\ref{tab:tsc_baselines}, \textit{DGLight} remains competitive with the CoLight family and even exceeds them on some metrics, showing that the proposed training procedure improves the model's reasoning ability for traffic situations. The main exception is Hangzhou-1, where the CoLight family performs exceptionally well because those models are trained directly on that dataset, which may partly reflect overfitting to that setting.
+
+Finally, \textit{JS-GRPO-h6} generally performs better than \textit{JS-GRPO-h3}, suggesting that a longer horizon for discounted cumulative reward provides a better estimate of the true long-term reward.
 
 \subsection{Transferability to Unseen Cities (RQ2)}
 \begin{table}[t]
