@@ -26,7 +26,7 @@ For differentiable policies $\pi_\theta(a \mid s)$, the policy gradient theorem 
 \[
 \nabla_\theta J(\theta) = \mathbb{E}_{s \sim d^\pi, a \sim \pi_\theta} \big[ \nabla_\theta \log \pi_\theta(a \mid s) \, Q^\pi(s,a) \big],
 \]
-and in practice we replace $Q^\pi(s,a)$ by an advantage estimate $\hat A_t$, leading to the classic REINFORCE-style update
+and in practice $Q^\pi(s,a)$ is replaced by an advantage estimate $\hat A_t$, leading to the classic REINFORCE-style update
 \[
 \theta \leftarrow \theta + \alpha \, \hat A_t \, \nabla_\theta \log \pi_\theta(a_t \mid s_t).
 \]
@@ -44,7 +44,7 @@ L^{\text{PPO}}(\theta) = \mathbb{E}_t \bigg[ \min\big( r_t(\theta) \hat A_t,\; \
 where $\epsilon$ is a small hyperparameter (e.g., $0.1$ or $0.2$). The $\min(\cdot)$ and the clipping together act as a trust region in probability space, so that even if $\hat A_t$ is large, the policy will not move too far away from $\pi_{\theta_{\text{old}}}$ in a single update.
 
 \paragraph{Group Relative Policy Optimization (GRPO).}
-Recent LLM-oriented RL work observes that when many responses can be sampled for the same prompt, we can estimate advantages without a separate value network. GRPO forms a group $\mathcal{G} = \{r_1, \dots, r_N\}$ of rollouts for the same input, scores them with a reward model $R_\phi(\cdot)$, and then normalizes within the group:
+Recent LLM-oriented RL work observes that when many responses can be sampled for the same prompt, it is possible to estimate advantages without a separate value network. GRPO forms a group $\mathcal{G} = \{r_1, \dots, r_N\}$ of rollouts for the same input, scores them with a reward model $R_\phi(\cdot)$, and then normalizes within the group:
 \[
 A_i = \frac{R_\phi(r_i) - \operatorname{mean}(\mathcal{G})}{\operatorname{std}(\mathcal{G})}.
 \]

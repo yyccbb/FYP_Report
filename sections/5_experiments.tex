@@ -11,25 +11,22 @@ In this second, I evaluate \textit{DGLight} to address the following research qu
 This subsection describes the datasets, simulation environment, baselines, evaluation metrics, and training configuration used throughout the experiments.
 
 
-\begin{table}[t]
-\centering
-\small
-\vspace{-1.5em}
-\caption{Statistics of traffic flow datasets.}
-\vspace{-1em}
-\label{tab:dataset_summary}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{ccccccc}
-\hline
-\multirow{2}{*}{Dataset} & \multirow{2}{*}{Structure} & \multirow{2}{*}{Vehicles} & \multicolumn{4}{c}{Arrival rate (vehicles/5min)} \\ \cline{4-7} 
- &  &  & \multicolumn{1}{l}{Mean} & \multicolumn{1}{l}{Std} & \multicolumn{1}{l}{Max} & \multicolumn{1}{l}{Min} \\ \hline
-Jinan1 & \multirow{3}{*}{$3 \times 4$} & 6295 & 523.67 & 98.52 & 671 & 255 \\
-Jinan2 &  & 4365 & 362.83 & 74.81 & 493 & 236 \\
-Jinan3 &  & 5494 & 456.92 & 160.87 & 569 & 362 \\ \hline
-Hangzhou1 & \multirow{2}{*}{$4 \times 4$} & 2983 & 247.68 & 40.44 & 332 & 211 \\
-Hangzhou2 &  & 6984 & 581.08 & 318.43 & 1145 & 202 \\ \hline
-\end{tabular}%
-}
+\begin{table}[h]
+    \centering
+    % \vspace{-1.5em}
+    \caption{Statistics of traffic flow datasets.}
+    \vspace{-0.5em}
+    \label{tab:dataset_summary}
+    \begin{tabular}{ccccccc}
+        \hline
+        \multirow{2}{*}{Dataset} & \multirow{2}{*}{Structure} & \multirow{2}{*}{Vehicles} & \multicolumn{4}{c}{Arrival rate (vehicles/5min)} \\ \cline{4-7} 
+        &  &  & \multicolumn{1}{l}{Mean} & \multicolumn{1}{l}{Std} & \multicolumn{1}{l}{Max} & \multicolumn{1}{l}{Min} \\ \hline
+        Jinan1 & \multirow{3}{*}{$3 \times 4$} & 6295 & 523.67 & 98.52 & 671 & 255 \\
+        Jinan2 &  & 4365 & 362.83 & 74.81 & 493 & 236 \\
+        Jinan3 &  & 5494 & 456.92 & 160.87 & 569 & 362 \\ \hline
+        Hangzhou1 & \multirow{2}{*}{$4 \times 4$} & 2983 & 247.68 & 40.44 & 332 & 211 \\
+        Hangzhou2 &  & 6984 & 581.08 & 318.43 & 1145 & 202 \\ \hline
+    \end{tabular}
 \end{table}
 
 \subsubsection{Dataset}
@@ -37,7 +34,7 @@ Experiments are conducted on standard traffic signal control benchmarks. Table~\
 
 
 \subsubsection{Environment}
-All methods are evaluated in \textit{CityFlow} \cite{tang2019cityflowcityscalebenchmarkmultitarget}, a scalable microscopic traffic simulator widely used in traffic signal control research. For each dataset, the simulator loads the corresponding road-network and traffic-flow configuration and exposes lane-level observations at every control step. Each controller selects one signal phase for every controlled intersection from the dataset-specific action space, after which the environment advances under a shared signal-switching interval. Unless otherwise stated, all compared methods use the same simulator configuration, decision interval, and evaluation protocol so that performance differences can be attributed to the controller rather than the environment setup.
+All methods are evaluated in an environment built on top of \textit{CityFlow} \cite{tang2019cityflowcityscalebenchmarkmultitarget}, a scalable microscopic traffic simulator widely used in traffic signal control research. For each dataset, the simulator loads the corresponding road-network and traffic-flow configuration and exposes lane-level observations at every control step. In my experiments, each intersection connects four lane sections: east, west, north, and south. The control action space therefore contains four signal phases: \textit{ETWT} (through movements from east and west), \textit{ELWL} (left turns from east and west), \textit{NTST} (through movements from north and south), and \textit{NLSL} (left turns from north and south). Right-turn movements are always allowed in the simulation. Each controller selects one signal phase for every controlled intersection, after which the environment advances under a shared signal-switching interval. The green phase duration is fixed at 30 seconds. Each green phase is followed by a 3-second yellow phase and a 2-second all-red interval to ensure safe signal transitions. Unless otherwise stated, all compared methods use the same simulator configuration, decision interval, and evaluation protocol so that performance differences can be attributed to the controller rather than the environment setup.
 
 \subsubsection{Baselines}
 The comparison includes traditional controllers, RL-based methods, and LLM-based methods. For completeness, I also report a random policy as a naive reference point.
