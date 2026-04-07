@@ -37,7 +37,7 @@ Experiments are conducted on standard traffic signal control benchmarks. Table~\
 All methods are evaluated in an environment built on top of \textit{CityFlow} \cite{tang2019cityflowcityscalebenchmarkmultitarget}, a scalable microscopic traffic simulator widely used in traffic signal control research. For each dataset, the simulator loads the corresponding road-network and traffic-flow configuration and exposes lane-level observations at every control step. In my experiments, each intersection connects four lane sections: east, west, north, and south. The control action space therefore contains four signal phases: \textit{ETWT} (through movements from east and west), \textit{ELWL} (left turns from east and west), \textit{NTST} (through movements from north and south), and \textit{NLSL} (left turns from north and south). Right-turn movements are always allowed in the simulation. Each controller selects one signal phase for every controlled intersection, after which the environment advances under a shared signal-switching interval. The green phase duration is fixed at 30 seconds. Each green phase is followed by a 3-second yellow phase and a 2-second all-red interval to ensure safe signal transitions. Unless otherwise stated, all compared methods use the same simulator configuration, decision interval, and evaluation protocol so that performance differences can be attributed to the controller rather than the environment setup.
 
 \subsubsection{Baselines}
-The comparison includes traditional controllers, RL-based methods, and LLM-based methods. For completeness, I also report a random policy as a naive reference point.
+The comparison includes traditional controllers, RL-based methods, and LLM-based methods.
 \begin{itemize}
     \item \textbf{Traditional methods.} \textit{FixedTime} \cite{webster} and \textit{MaxPressure} \cite{MERCADER2020275}.
     \item \textbf{RL methods.} \textit{MPLight} \cite{Chen_Wei_Xu_Zheng_Yang_Xiong_Xu_Li_2020}, \textit{AttendLight}, \textit{PressLight}, \textit{CoLight} \cite{10.1145/3357384.3357902}, \textit{Efficient-CoLight}, and \textit{Advanced-CoLight}.
@@ -45,7 +45,7 @@ The comparison includes traditional controllers, RL-based methods, and LLM-based
 \end{itemize}
 
 \subsubsection{Metrics}
-I report three standard metrics, all of which are minimized:
+Following previous studies \cite{pmlr-v162-zhang22ah}, the following metrics are used to evaluate the TSC agents trained with different methods:
 \begin{itemize}
     \item \textbf{Average traveling time (ATT)} quantifies the average duration of all vehicles traveling from their origins to their respective destinations.
     \item \textbf{Average queue length (AQL)} is defined as the average number of queuing vehicles waiting in the road network.
@@ -54,31 +54,51 @@ I report three standard metrics, all of which are minimized:
 Lower values indicate better traffic efficiency for all three metrics.
 
 \subsubsection{Training Configuration}
-All LLM-based methods use \textit{Llama3-8b} as the backbone model. For the proposed method, the initial checkpoint is inherited from the \textit{LLMLight} pipeline \cite{lai2024llmlightlargelanguagemodels} rather than obtained through an additional supervised fine-tuning stage. This choice is deliberate: training a dedicated supervised model on high-quality traffic reasoning traces is beyond the computational budget of this dissertation. By starting from the \textit{LLMLight} base model, the experiments isolate the contribution of the proposed critic-guided GRPO procedure while preserving a fair comparison with prior LLM-based controllers.
-
-Table~\ref{tab:training_config} is kept as a fill-in template for the exact training hyperparameters used in the final experiments.
+All LLM-based methods use \textit{Llama3-8b} as the backbone model. For the proposed method, the initial checkpoint is inherited from the \textit{LLMLight} pipeline \cite{lai2024llmlightlargelanguagemodels} rather than obtained through an additional supervised fine-tuning stage, since training a dedicated supervised model on high-quality traffic reasoning traces is beyond the computational budget of this dissertation. Starting from the \textit{LLMLight} base model isolates the contribution of the proposed critic-guided GRPO procedure while preserving a fair comparison with prior LLM-based controllers. The overall training framework then combines a pretrained CoLight critic with a GRPO-based policy optimization stage. The critic retains the uniform RL hyperparameters reported by Zhang et al. \cite{pmlr-v162-zhang22ah}, while the policy stage uses LoRA adaptation and distributed training. Table~\ref{tab:critic_training_config} and Table~\ref{tab:grpo_training_config} summarize the corresponding framework settings.
 
 \begin{table}[t]
     \centering
-    \caption{Training configuration template for the proposed method. Fill in the exact hyperparameter values used in the final experiments.}
-    \label{tab:training_config}
-    \begin{tabular}{ll}
+    \caption{CoLight critic configuration.}
+    \label{tab:critic_training_config}
+    \small
+    \begin{tabular}{p{0.42\linewidth}p{0.5\linewidth}}
         \toprule
         Component & Configuration \\
         \midrule
-        DQN critic backbone & CoLight-based DQN \\
-        DQN optimizer and learning rate &  \\
-        Discount factor $\gamma$ &  \\
-        Replay buffer size &  \\
-        Target network update interval &  \\
-        DQN batch size &  \\
-        Rollout group size $k$ &  \\
-        GRPO optimizer and learning rate &  \\
-        GRPO batch size / epochs &  \\
-        Sampling temperature &  \\
-        Invalid-action reward &  \\
-        Maximum response length &  \\
-        Random seeds &  \\
+        Optimizer & Adam with learning rate $1 \times 10^{-3}$ \\
+        Discount factor $\gamma$ & 0.8 \\
+        Replay buffer size & 12000 \\
+        Sample size per round & 3000 \\
+        Batch size & 20 \\
+        Gradient epochs per round & 100 \\
+        Target network update interval & every 5 rounds \\
+        Exploration schedule & $\epsilon = \max(0.8 \cdot 0.95^r, 0.2)$ \\
+        Reward & $-0.25 \,\cdot\,$queue length \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{table}[t]
+    \centering
+    \caption{GRPO policy optimization configuration.}
+    \label{tab:grpo_training_config}
+    \small
+    \begin{tabular}{p{0.42\linewidth}p{0.5\linewidth}}
+        \toprule
+        Component & Configuration \\
+        \midrule
+        Policy backbone & Llama3-8b \\
+        LoRA configuration & rank = $8$, $\alpha = 16$, dropout $= 0.05$, bias = none \\
+        \midrule
+        Rollout environment & 3600-second episodes with a 30-second action interval \\
+        Rollout group size $k$ & 4 \\
+        Prompt / completion length & 2048 / 1024 tokens \\
+        Rollout sampling & temperature $= 1.0$, top-$p = 1.0$, top-$k = 50$ \\
+        \midrule
+        GRPO optimizer and learning rate & default TRL optimizer, learning rate $= 1.0 \times 10^{-6}$ \\
+        GRPO batch size / accumulation / epochs & 8 per device / 1 / 1 \\
+        Invalid-action reward & 0.0 \\
+        Distributed training setup & 2 H100-96GB GPUs, 16 CPUs, 128 GB RAM, 12-hour wall time \\
         \bottomrule
     \end{tabular}
 \end{table}
