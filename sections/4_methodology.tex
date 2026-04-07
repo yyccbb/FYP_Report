@@ -1,9 +1,135 @@
-\section{Plan for Next Semester}
-The plan for the next semester is outlined as follows:
+\section{Methodology}
+This section introduces \textit{DGLight}, a two-stage reinforcement-learning pipeline for adapting a pretrained large language model to traffic signal control. In the first stage, a CoLight-based DQN critic is trained to estimate action values for signal-phase decisions when provided with structured environment states. In the second stage, the frozen critic scores candidate LLM responses during rollout and the scores are used as the reward signal for GRPO-based policy optimization.
+
+\begin{figure}[t]
+    \centering
+    \fbox{
+        \parbox{0.94\linewidth}{
+            \textbf{Two-stage pipeline overview.}
+
+            \textbf{Stage 1: DQN critic pretraining.}
+            Train a CoLight-based DQN critic that estimates per-phase action values from graph-structured traffic observations.
+
+            \textbf{Stage 2: DGLight fine-tuning.}
+            (1) Convert each intersection state into a textual prompt.
+            (2) Sample $k$ candidate responses from the LLM.
+            (3) Parse each response into a signal phase.
+            (4) Query the frozen critic for per-action $Q$-values.
+            (5) Score the sampled candidates and execute the best sampled action in CityFlow.
+            (6) Store prompt--score records for all intersections and time steps.
+            (7) Run GRPO on the collected records to update the LLM policy.
+        }
+    }
+    \caption{Overview of the two-stage \textit{DGLight} pipeline. An alternative joint-scored comparison variant is described separately in Appendix~\ref{appendix:joint_scored_grpo}.}
+    \label{fig:dglight_pipeline}
+\end{figure}
+
+\subsection{Pretraining the CoLight-Based DQN Critic}
+The critic used in \textit{DGLight} is based on \textit{CoLight} \cite{10.1145/3357384.3357902}, a graph-attentive deep Q-learning model for network-level traffic signal control. \textit{CoLight} is employed as a pretrained value estimator so that the subsequent GRPO stage can query a traffic-aware action-value function rather than rely exclusively on the raw environment reward. Given the current environment state, the critic predicts action values for each intersection and thereby provides a dense estimate of the quality of candidate signal phases under the prevailing traffic situation.
+
+The \textit{CoLight} critic is composed of three main components as illustrated in Figure~\ref{fig:dglight_critic_architecture}. The first component is an observation embedding module that transforms the local traffic state of each intersection into a latent feature representation. The second component consists of one or more multi-head graph-attention layers, which propagate information across neighboring intersections and produce attention-weighted network representations. The final component is a Q-value prediction layer that maps the aggregated features to one scalar value for each admissible signal phase. This architecture combines local state encoding, inter-intersection coordination, and value-based action estimation within a single model.
+
+\begin{figure}[t]
+    \centering
+    \fbox{
+        \parbox{0.88\linewidth}{
+            \textbf{Critic architecture placeholder.}
+
+            Replace this box with a figure showing:
+            local traffic observations $\rightarrow$ observation embedding layers
+            $\rightarrow$ graph attention over neighboring intersections
+            $\rightarrow$ per-phase Q-value prediction head.
+        }
+    }
+    \caption{Mockup placeholder for the \textit{CoLight}-based DQN critic architecture used in \textit{DGLight}.}
+    \label{fig:dglight_critic_architecture}
+\end{figure}
+
+Training follows the standard value-based reinforcement learning procedure. The model interacts with the traffic environment to collect state transitions, actions, rewards, and subsequent states ($(s,a,r,s')$), where the stepwise reward is defined to be inversely proportional to queue lengths at each intersection. These transitions are stored in replay memory for off-policy updates. The optimization objective minimizes the Bellman error
+\[
+\mathcal{L}_{\mathrm{Bellman}}(\theta)
+=
+\mathbb{E}_{(s,a,r,s')\sim \mathcal{D}}
+\left[
+\left(
+r + \gamma \max_{a'} Q_{\theta^-}(s',a') - Q_{\theta}(s,a)
+\right)^2
+\right],
+\]
+where $\mathcal{D}$ denotes the replay buffer, $\theta$ denotes the online network parameters, and $\theta^-$ denotes the target network parameters. Experience replay improves sample efficiency, and the target network improves optimization stability.
+
+\textbf{Disclaimer:} The critic model, its training objective, and its overall learning logic are not original contributions of this dissertation; they are inherited from prior \textit{CoLight} research. My contribution to this component is limited to re-implementing the model in PyTorch for this codebase, whereas the original \textit{CoLight} implementation was based on TensorFlow.
+
+\subsection{Prompted LLM Policy for Intersection Control}
+At each signal-switching step $t$, each intersection $i$ is converted into a textual prompt $x_{i,t}$ that summarizes the current traffic condition together with the task instruction and the available signal phases. The prompt is constructed from the environment state used by the controller, including the current phase and traffic movement pressure/queue information, and is formatted so that the model produces both human-readable reasoning and a final phase choice. This design preserves interpretability while remaining fully compatible with autoregressive language modeling.
+
+Given prompt $x_{i,t}$, the policy $\pi_\theta$ samples a group of $k$ candidate responses
+\[
+\{y_{i,t}^{(1)}, y_{i,t}^{(2)}, \dots, y_{i,t}^{(k)}\}.
+\]
+Each response is then mapped to a signal phase through a deterministic parser:
+\[
+a_{i,t}^{(j)} = \operatorname{Parse}(y_{i,t}^{(j)}), \qquad j = 1, \dots, k.
+\]
+If the response fails to specify a valid action in the predefined action space, it is treated as an invalid output and assigned a fallback reward during training. This allows the method to preserve free-form reasoning generation while still enforcing a discrete control interface at execution time.
+
+\subsection{DQN-Guided Action Scoring}
+The central idea of \textit{DGLight} is to replace coarse trajectory-level rewards with direct action-level evaluation from the pretrained DQN critic. For the current traffic state at intersection $i$, the frozen critic produces a vector of estimated returns over all admissible signal phases:
+\[
+\mathbf{q}_{i,t} = \bigl[ Q_\phi(s_{i,t}, a) \bigr]_{a \in A},
+\]
+where $s_{i,t}$ is the structured traffic state and $Q_\phi$ is the pretrained DQN critic. The critic therefore acts as a traffic-aware evaluator that maps the current state to a dense preference ordering over actions.
+
+Each sampled LLM response is scored by the critic through its parsed action:
+\[
+r_{i,t}^{(j)} =
+\begin{cases}
+Q_\phi\!\left(s_{i,t}, a_{i,t}^{(j)}\right), & \text{if } a_{i,t}^{(j)} \in A, \\
+r_{\mathrm{invalid}}, & \text{otherwise},
+\end{cases}
+\]
+where $r_{\mathrm{invalid}}$ is a fixed fallback reward for malformed or out-of-range decisions. Among the sampled candidates, the action actually executed in the environment is the highest-scoring sampled action,
+\[
+j_{i,t}^{*} = \arg\max_{j \in \{1,\dots,k\}} r_{i,t}^{(j)},
+\qquad
+\hat a_{i,t} = a_{i,t}^{(j_{i,t}^{*})}.
+\]
+Thus, the environment rollout is still driven by sampled LLM outputs, but execution is guided by the critic's action-value estimate.
+
+This design yields two methodological advantages. First, the reward signal is dense: every sampled response receives an immediate action-specific score rather than waiting for a sparse terminal outcome. Second, the reward is directly aligned with the control decision itself, since the model is encouraged to generate reasoning trajectories whose final answer corresponds to a high-value traffic action. Compared with fixed-horizon cumulative congestion rewards, this provides finer credit assignment at each decision step. Compared with ranking-style refinement objectives, the magnitude of the action preference directly influences the GRPO update.
+
+\subsection{GRPO-Based Policy Optimization}
+After rollout collection, each intersection-step pair contributes a training record consisting of the prompt and the full critic score vector,
+\[
+\mathcal{D}_{i,t} = \bigl(x_{i,t}, \mathbf{q}_{i,t}\bigr).
+\]
+Importantly, the stored supervision is not just the score of the executed action. Instead, the entire per-action vector is retained so that any newly sampled response for the same prompt can be rewarded according to the action it proposes. During GRPO training, a completion $y$ sampled for prompt $x_{i,t}$ is assigned reward
+\[
+R\!\left(x_{i,t}, y; \mathbf{q}_{i,t}\right) =
+\begin{cases}
+\mathbf{q}_{i,t}[a(y)], & \text{if } a(y) \in A, \\
+r_{\mathrm{invalid}}, & \text{otherwise},
+\end{cases}
+\]
+where $a(y)$ denotes the parsed action of completion $y$. The resulting reward values are then normalized within each sampled group, producing relative advantages that drive the GRPO update.
+
+This optimizer is particularly well suited to the present setting. Unlike PPO-style methods that typically require a separate learned value model, GRPO estimates relative advantages directly from groups of sampled responses for the same prompt. This makes it a natural fit for LLM fine-tuning, where multiple completions can be generated efficiently for a single traffic state. More importantly, it addresses the gap identified in Section~2: instead of relying on a weaker ranking-only refinement stage, the policy is updated through a modern RL objective in which critic-derived reward directly shapes the optimization signal.
+
+\subsection{End-to-End DGLight Training Procedure}
+The complete training loop can be summarized as follows:
 \begin{enumerate}
-    \item Refactor the existing TensorFlow-based codebase to PyTorch for improved compatibility and flexibility, and reorganize the current project structure for better maintainability.
-    \item Adapt the GiGPO-style reward calculation to the TSC context. Test and make necessary adjustments to the formulation and give it a cool name.
-    \item Implement the asynchronous message propagation mechanism as described in the \textit{Traffic-R1} paper.
-    \item Conduct comprehensive experiments and benchmark the proposed framework against state-of-the-art (SOTA) baselines.
-    \item Prepare and finalize the report documenting the methodology, results, and findings.
+    \item Pretrain the CoLight-based DQN critic.
+    \item Freeze the critic checkpoint for downstream use in \textit{DGLight}.
+    \item Reset the CityFlow environment and build one textual prompt for each active intersection.
+    \item Sample $k$ candidate responses from the LLM for every prompt.
+    \item Parse each response into a discrete signal phase.
+    \item Query the frozen critic to obtain per-action $Q$-values for the current traffic state.
+    \item Score the sampled responses according to their parsed actions and execute the best sampled action at each intersection.
+    \item Store the prompt together with the full per-action score vector as a GRPO training record.
+    \item Repeat the above process for the full rollout episode, then fine-tune the policy on the collected records with GRPO.
 \end{enumerate}
+
+In practice, the two stages are decoupled. The critic is first trained offline as a CoLight-based DQN value estimator, and the resulting checkpoint is then reused as a fixed evaluator during LLM fine-tuning. Exact hyperparameter settings, model sizes, rollout lengths, and dataset configurations are deferred to the experimental section.
+
+\subsection{Comparison Variant}
+For completeness, I also implemented a \textit{Joint-Scored GRPO} variant as a comparison method. Instead of using direct critic $Q$-values to score sampled actions, that variant estimates action quality indirectly from short-horizon joint rollout returns over snapshot-forked simulations, and then projects those returns back to per-intersection action scores for GRPO training. Because this variant is included only to test whether indirect joint scoring can outperform direct critic guidance, I do not treat it as a co-equal methodological contribution in the main text. Its detailed design is provided separately in Appendix~\ref{appendix:joint_scored_grpo}.
