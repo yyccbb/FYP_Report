@@ -21,6 +21,12 @@
 \setstretch{1}
 % \titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
 \titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}[runin]
+  {\normalsize\bfseries}
+  {\thesubsubsection}
+  {1em}
+  {}
+  [.]
 
 \graphicspath{{./images/}}
 
@@ -96,7 +102,6 @@
 \input{sections/7_conclusion.tex}
 
 % ---------- References ----------
-\section{References}
 \printbibliography
 
 % ---------- Appendix ----------

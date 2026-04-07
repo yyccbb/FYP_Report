@@ -1,0 +1,208 @@
+\section{Experiments}
+In this second, I evaluate \textit{DGLight} to address the following research questions:
+\begin{itemize}
+    \item \textbf{RQ1: (Effectiveness)} Can \textit{DGLight} outperform traditional, RL-based, and existing LLM-based traffic signal control methods on standard TSC datasets?
+    \item \textbf{RQ2: (Transferability)} Does \textit{DGLight} retain strong performance when evaluated on city datasets that were not used to train the DQN critic?
+    \item \textbf{RQ3: (Interpretability)} Are the decisions produced by \textit{DGLight} interpretable, in the sense that its generated reasoning reflects the traffic conditions that motivate the selected phase?
+    \item \textbf{RQ4: (Ablation Study)} How much improvement comes from critic-guided GRPO, as compared with baseline and intermediate models?
+\end{itemize}
+
+\subsection{Experimental Settings}
+This subsection describes the datasets, simulation environment, baselines, evaluation metrics, and training configuration used throughout the experiments.
+
+
+\begin{table}[t]
+\centering
+\small
+\vspace{-1.5em}
+\caption{Statistics of traffic flow datasets.}
+\vspace{-1em}
+\label{tab:dataset_summary}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{ccccccc}
+\hline
+\multirow{2}{*}{Dataset} & \multirow{2}{*}{Structure} & \multirow{2}{*}{Vehicles} & \multicolumn{4}{c}{Arrival rate (vehicles/5min)} \\ \cline{4-7} 
+ &  &  & \multicolumn{1}{l}{Mean} & \multicolumn{1}{l}{Std} & \multicolumn{1}{l}{Max} & \multicolumn{1}{l}{Min} \\ \hline
+Jinan1 & \multirow{3}{*}{$3 \times 4$} & 6295 & 523.67 & 98.52 & 671 & 255 \\
+Jinan2 &  & 4365 & 362.83 & 74.81 & 493 & 236 \\
+Jinan3 &  & 5494 & 456.92 & 160.87 & 569 & 362 \\ \hline
+Hangzhou1 & \multirow{2}{*}{$4 \times 4$} & 2983 & 247.68 & 40.44 & 332 & 211 \\
+Hangzhou2 &  & 6984 & 581.08 & 318.43 & 1145 & 202 \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\subsubsection{Dataset}
+Experiments are conducted on standard traffic signal control benchmarks. Table~\ref{tab:dataset_summary} is left as a structured summary template for the final dataset statistics.
+
+
+\subsubsection{Environment}
+All methods are evaluated in \textit{CityFlow} \cite{tang2019cityflowcityscalebenchmarkmultitarget}, a scalable microscopic traffic simulator widely used in traffic signal control research. For each dataset, the simulator loads the corresponding road-network and traffic-flow configuration and exposes lane-level observations at every control step. Each controller selects one signal phase for every controlled intersection from the dataset-specific action space, after which the environment advances under a shared signal-switching interval. Unless otherwise stated, all compared methods use the same simulator configuration, decision interval, and evaluation protocol so that performance differences can be attributed to the controller rather than the environment setup.
+
+\subsubsection{Baselines}
+The comparison includes traditional controllers, RL-based methods, and LLM-based methods. For completeness, I also report a random policy as a naive reference point.
+\begin{itemize}
+    \item \textbf{Traditional methods.} \textit{FixedTime} \cite{webster} and \textit{MaxPressure} \cite{MERCADER2020275}.
+    \item \textbf{RL methods.} \textit{MPLight} \cite{Chen_Wei_Xu_Zheng_Yang_Xiong_Xu_Li_2020}, \textit{AttendLight}, \textit{PressLight}, \textit{CoLight} \cite{10.1145/3357384.3357902}, \textit{Efficient-CoLight}, and \textit{Advanced-CoLight}.
+    \item \textbf{LLM-based methods.} \textit{LightGPT (Llama3-8b)} \cite{lai2024llmlightlargelanguagemodels}, \textit{JS-GRPO-h3 (Llama3-8b)}, \textit{JS-GRPO-h6 (Llama3-8b)}, and the proposed \textit{DGLight (Llama3-8b)}. The two \textit{JS-GRPO} variants correspond to the comparison method described in Appendix~\ref{appendix:joint_scored_grpo}, instantiated with horizon lengths of 3 and 6, respectively.
+\end{itemize}
+
+\subsubsection{Metrics}
+I report three standard metrics, all of which are minimized:
+\begin{itemize}
+    \item \textbf{Average traveling time (ATT)} quantifies the average duration of all vehicles traveling from their origins to their respective destinations.
+    \item \textbf{Average queue length (AQL)} is defined as the average number of queuing vehicles waiting in the road network.
+    \item \textbf{Average waiting time (AWT)} quantifies the average queuing time of vehicles at every intersection in the road network.
+\end{itemize}
+Lower values indicate better traffic efficiency for all three metrics.
+
+\subsubsection{Training Configuration}
+All LLM-based methods use \textit{Llama3-8b} as the backbone model. For the proposed method, the initial checkpoint is inherited from the \textit{LLMLight} pipeline \cite{lai2024llmlightlargelanguagemodels} rather than obtained through an additional supervised fine-tuning stage. This choice is deliberate: training a dedicated supervised model on high-quality traffic reasoning traces is beyond the computational budget of this dissertation. By starting from the \textit{LLMLight} base model, the experiments isolate the contribution of the proposed critic-guided GRPO procedure while preserving a fair comparison with prior LLM-based controllers.
+
+Table~\ref{tab:training_config} is kept as a fill-in template for the exact training hyperparameters used in the final experiments.
+
+\begin{table}[t]
+    \centering
+    \caption{Training configuration template for the proposed method. Fill in the exact hyperparameter values used in the final experiments.}
+    \label{tab:training_config}
+    \begin{tabular}{ll}
+        \toprule
+        Component & Configuration \\
+        \midrule
+        DQN critic backbone & CoLight-based DQN \\
+        DQN optimizer and learning rate &  \\
+        Discount factor $\gamma$ &  \\
+        Replay buffer size &  \\
+        Target network update interval &  \\
+        DQN batch size &  \\
+        Rollout group size $k$ &  \\
+        GRPO optimizer and learning rate &  \\
+        GRPO batch size / epochs &  \\
+        Sampling temperature &  \\
+        Invalid-action reward &  \\
+        Maximum response length &  \\
+        Random seeds &  \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{Results on TSC Datasets (RQ1)}
+\begin{table}[t]
+    \centering
+    \caption{Performance of traditional and RL-based baselines on the TSC datasets. Lower values are better. Best and second-best values are highlighted in bold and underlined, respectively.}
+    \label{tab:tsc_baselines}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{lccccccccccccccc}
+        \toprule
+        & \multicolumn{9}{c}{Jinan} & \multicolumn{6}{c}{Hangzhou} \\
+        \cmidrule(lr){2-10} \cmidrule(lr){11-16}
+        Models & \multicolumn{3}{c}{1} & \multicolumn{3}{c}{2} & \multicolumn{3}{c}{3} & \multicolumn{3}{c}{1} & \multicolumn{3}{c}{2} \\
+        \cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10} \cmidrule(lr){11-13} \cmidrule(lr){14-16}
+        & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT \\
+        \midrule
+        \multicolumn{16}{c}{\textbf{Transportation Methods}} \\
+        \midrule
+        Random & 597.62 & 687.35 & 99.46 & 555.23 & 428.38 & 100.40 & 552.74 & 529.63 & 99.33 & 621.14 & 295.81 & 96.06 & 504.28 & 432.92 & 92.61 \\
+        FixedTime & 481.79 & 491.03 & 70.99 & 441.19 & 294.14 & 66.72 & 450.11 & 394.34 & 69.19 & 616.02 & 301.33 & 73.99 & 486.72 & 425.15 & 72.80 \\
+        MaxPressure & 281.58 & 170.71 & \underline{44.53} & 273.20 & 106.58 & \textbf{38.25} & 265.75 & 133.90 & \underline{40.20} & 325.33 & 68.99 & \underline{49.60} & 347.74 & 215.53 & \underline{70.58} \\
+        \midrule
+        \multicolumn{16}{c}{\textbf{RL Methods}} \\
+        \midrule
+        MPLight & 307.82 & 215.93 & 97.88 & 304.51 & 142.25 & 90.91 & 291.79 & 171.70 & 89.93 & 345.60 & 84.70 & 81.97 & 358.56 & 237.17 & 100.16 \\
+        AttendLight & 291.29 & 186.25 & 61.73 & 280.94 & 115.52 & 52.46 & 273.02 & 144.05 & 55.93 & 322.94 & 66.96 & 55.19 & 358.81 & 239.05 & 72.88 \\
+        PressLight & 291.57 & 185.46 & 50.53 & 281.46 & 115.99 & 47.27 & 275.85 & 148.18 & 54.81 & 364.13 & 98.67 & 90.33 & 417.01 & 349.25 & 150.46 \\
+        CoLight & 279.60 & 168.53 & 58.87 & 274.77 & 108.28 & 54.14 & 266.39 & 135.08 & 53.33 & 322.85 & 66.94 & 61.82 & 342.90 & 212.09 & 99.74 \\
+        Efficient-CoLight & \underline{277.11} & \underline{163.60} & \textbf{43.41} & \underline{269.24} & \underline{102.98} & \underline{39.74} & \underline{262.25} & \underline{129.72} & \textbf{39.99} & \underline{311.96} & \underline{58.20} & \textbf{36.83} & \underline{333.27} & \underline{189.65} & \textbf{61.70} \\
+        Advanced-CoLight & \textbf{274.67} & \textbf{160.85} & 49.30 & \textbf{268.25} & \textbf{102.12} & 41.11 & \textbf{260.66} & \textbf{127.83} & 43.54 & \textbf{304.47} & \textbf{52.94} & \underline{41.75} & \textbf{329.16} & \textbf{186.34} & 76.59 \\
+        \bottomrule
+    \end{tabular}%
+    }
+\end{table}
+
+\subsubsection{LLM-Based Methods}
+\begin{table}[t]
+    \centering
+    \caption{Performance of LLM-based methods on the TSC datasets. Fill in the final values after evaluation. Lower values are better.}
+    \label{tab:tsc_llm_results}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{lccccccccccccccc}
+        \toprule
+        & \multicolumn{9}{c}{Jinan} & \multicolumn{6}{c}{Hangzhou} \\
+        \cmidrule(lr){2-10} \cmidrule(lr){11-16}
+        Models & \multicolumn{3}{c}{1} & \multicolumn{3}{c}{2} & \multicolumn{3}{c}{3} & \multicolumn{3}{c}{1} & \multicolumn{3}{c}{2} \\
+        \cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10} \cmidrule(lr){11-13} \cmidrule(lr){14-16}
+        & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT \\
+        \midrule
+        LightGPT (Llama3-8b) &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
+        JS-GRPO-h3 (Llama3-8b) &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
+        JS-GRPO-h6 (Llama3-8b) &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
+        DGLight (Llama3-8b) &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
+        \bottomrule
+    \end{tabular}%
+    }
+\end{table}
+
+% Add the textual analysis for RQ1 after the LLM-based results are finalized.
+
+\subsection{Transferability to Unseen Cities (RQ2)}
+\begin{table}[t]
+    \centering
+    \caption{Transferability results on datasets that are not used to train the DQN critic. Fill in the final values after evaluation. Lower values are better.}
+    \label{tab:transferability}
+    \begin{tabular}{llccc}
+        \toprule
+        Model & Unseen dataset & ATT & AQL & AWT \\
+        \midrule
+        LightGPT (Llama3-8b) &  &  &  &  \\
+        JS-GRPO-h3 (Llama3-8b) &  &  &  &  \\
+        JS-GRPO-h6 (Llama3-8b) &  &  &  &  \\
+        DGLight (Llama3-8b) &  &  &  &  \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+% Add the transferability discussion for RQ2 after the unseen-city results are finalized.
+
+\subsection{Interpretability of Model Decisions (RQ3)}
+To qualitatively examine RQ3, I present a representative reasoning trace from \textit{DGLight} and analyze whether the stated rationale matches the observed traffic condition and the chosen signal phase.
+
+\begin{figure}[t]
+    \centering
+    \fbox{
+        \parbox{0.92\linewidth}{
+            \textbf{Sample reasoning response placeholder.}
+
+            Insert a representative \textit{DGLight} example here, including:
+            (1) the relevant prompt or traffic-state summary,
+            (2) the model's reasoning,
+            (3) the final selected phase, and
+            (4) a short interpretation of why the reasoning is meaningful.
+        }
+    }
+    \caption{Placeholder for a qualitative example showing how \textit{DGLight} reasons about a traffic state before selecting a signal phase.}
+    \label{fig:dglight_reasoning_example}
+\end{figure}
+
+\subsection{Ablation Study (RQ4)}
+This ablation isolates two sources of improvement: traffic-specific LLM adaptation and critic-guided reinforcement learning. The untuned \textit{Llama3-8b} measures the capability of the base model without TSC adaptation, \textit{LightGPT} measures the gain from prior TSC-specific training, and \textit{DGLight} measures the additional benefit of the proposed critic-guided GRPO procedure.
+
+\begin{table}[t]
+    \centering
+    \caption{Ablation study comparing the untuned base model, \textit{LightGPT}, and \textit{DGLight}. Fill in the final values after evaluation. Lower values are better.}
+    \label{tab:ablation}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{lccccccccccccccc}
+        \toprule
+        & \multicolumn{9}{c}{Jinan} & \multicolumn{6}{c}{Hangzhou} \\
+        \cmidrule(lr){2-10} \cmidrule(lr){11-16}
+        Models & \multicolumn{3}{c}{1} & \multicolumn{3}{c}{2} & \multicolumn{3}{c}{3} & \multicolumn{3}{c}{1} & \multicolumn{3}{c}{2} \\
+        \cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10} \cmidrule(lr){11-13} \cmidrule(lr){14-16}
+        & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT \\
+        \midrule
+        Llama3-8b &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
+        LightGPT (Llama3-8b) &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
+        DGLight (Llama3-8b) &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
+        \bottomrule
+    \end{tabular}%
+    }
+\end{table}
