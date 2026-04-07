@@ -123,3 +123,73 @@ with a fallback reward used when no sampled candidate proposes action $a$. The r
 
 \paragraph{Collect-then-train split.}
 In implementation, the variant is organized as a collect-then-train pipeline. A rollout stage first saves prompt records, selected actions, and projected action-score vectors obtained from snapshot-forked candidate evaluation. The GRPO stage then reloads these records and fine-tunes the LLM policy using the same prompt-conditioned reward lookup mechanism as in the main method. This design isolates the additional cost of joint candidate evaluation from the policy optimization stage and makes it suitable for controlled comparison against \textit{QGuided-GRPO}.
+
+
+\subsubsection{Sample Prompt}
+\label{appendix:sample_prompt}
+You are an expert in traffic management.
+
+A traffic light regulates a four-way intersection with northern, southern, eastern, and western approaches, each containing two lanes: one for through traffic and one for left-turns. Each lane is further divided into three segments. Segment 1 is the closest to the intersection. Segment 2 is in the middle. Segment 3 is the farthest. In a lane, there may be early queued vehicles and approaching vehicles traveling in different segments. Early queued vehicles have already arrived at the intersection and await passage permission. Approaching vehicles will arrive at the intersection in the future.
+
+The traffic light has 4 signal phases. Each signal relieves vehicles' flow in a group of two specific lanes.
+
+Available signal phases:
+- ETWT: Eastern and western through lanes.
+- NTST: Northern and southern through lanes.
+- ELWL: Eastern and western left-turn lanes.
+- NLSL: Northern and southern left-turn lanes.
+
+Current intersection state:
+Signal: ETWT
+Relieves: Eastern and western through lanes.
+- Early queued: 0 (East), 1 (West), 1 (Total)
+- Segment 1: 0 (East), 0 (West), 0 (Total)
+- Segment 2: 1 (East), 0 (West), 1 (Total)
+- Segment 3: 0 (East), 2 (West), 2 (Total)
+- Neighbor incoming totals: 2 (East), 1 (West), 3 (Known total), 2/2 available
+
+Signal: NTST
+Relieves: Northern and southern through lanes.
+- Early queued: 0 (North), 0 (South), 0 (Total)
+- Segment 1: 0 (North), 0 (South), 0 (Total)
+- Segment 2: 0 (North), 0 (South), 0 (Total)
+- Segment 3: 1 (North), 0 (South), 1 (Total)
+- Neighbor incoming totals: NA (North), 3 (South), 3 (Known total), 1/2 available
+
+Signal: ELWL
+Relieves: Eastern and western left-turn lanes.
+- Early queued: 0 (East), 0 (West), 0 (Total)
+- Segment 1: 0 (East), 0 (West), 0 (Total)
+- Segment 2: 0 (East), 0 (West), 0 (Total)
+- Segment 3: 0 (East), 1 (West), 1 (Total)
+- Neighbor incoming totals: 2 (East), 1 (West), 3 (Known total), 2/2 available
+
+Signal: NLSL
+Relieves: Northern and southern left-turn lanes.
+- Early queued: 0 (North), 0 (South), 0 (Total)
+- Segment 1: 0 (North), 0 (South), 0 (Total)
+- Segment 2: 0 (North), 0 (South), 0 (Total)
+- Segment 3: 0 (North), 0 (South), 0 (Total)
+- Neighbor incoming totals: NA (North), 3 (South), 3 (Known total), 1/2 available
+
+The state description above lists:
+- The group of lanes relieved under each traffic light phase.
+- The number of early queued vehicles in the allowed lanes of each signal.
+- The number of approaching vehicles in different segments of the allowed lanes of each signal.
+- Neighbor incoming totals from adjacent intersections for each phase.
+- `NA` means that adjacent side has a virtual/missing neighbor and is excluded from `Known total`.
+
+Question:
+Which is the most effective traffic signal that will most significantly improve the traffic condition during the next phase?
+
+Note:
+- Traffic congestion is primarily dictated by early queued vehicles, with the most significant impact.
+- You must pay the most attention to lanes with long queue lengths.
+- It is not urgent to consider vehicles in distant segments, since they are unlikely to reach the intersection soon.
+
+Requirements:
+- Think step by step.
+- You can only choose one of the signals listed above.
+- Step 1: Provide a brief analysis identifying the optimal traffic signal.
+- Step 2: After finishing the analysis, answer with your chosen signal.
+- Include exactly one final decision tag in this format: <signal>PHASE</signal>, where PHASE is one of: ETWT, NTST, ELWL, NLSL.

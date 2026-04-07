@@ -60,8 +60,8 @@ where $\mathcal{D}$ denotes the replay buffer, $\theta$ denotes the online netwo
 
 \textbf{Disclaimer:} The critic model, its training objective, and its overall learning logic are not original contributions of this dissertation; they are inherited from prior \textit{CoLight} research. My contribution to this component is limited to re-implementing the model in PyTorch for this codebase, whereas the original \textit{CoLight} implementation was based on TensorFlow.
 
-\subsection{Prompted LLM Policy for Intersection Control}
-At each signal-switching step $t$, each intersection $i$ is converted into a textual prompt $x_{i,t}$ that summarizes the current traffic condition together with the task instruction and the available signal phases. The prompt is constructed from the environment state used by the controller, including the current phase and traffic movement pressure/queue information, and is formatted so that the model produces both human-readable reasoning and a final phase choice. This design preserves interpretability while remaining fully compatible with autoregressive language modeling.
+\subsection{LLM Prompting and Action Sampling}
+At each signal-switching step $t$, each intersection $i$ is converted into a textual prompt $x_{i,t}$ that summarizes the current traffic condition together with the task instruction and the available signal phases. The prompt is constructed from the environment state used by the controller including the current phase and queue information. Task description is formatted so that the model produces both human-readable reasoning and a final phase choice. A sample prompt is provided in Appendix~\ref{appendix:sample_prompt}.
 
 Given prompt $x_{i,t}$, the policy $\pi_\theta$ samples a group of $k$ candidate responses
 \[
