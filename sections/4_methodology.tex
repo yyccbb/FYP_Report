@@ -3,47 +3,31 @@ This section introduces \textit{DGLight}, a two-stage reinforcement-learning pip
 
 \begin{figure}[t]
     \centering
-    \fbox{
-        \parbox{0.94\linewidth}{
-            \textbf{Two-stage pipeline overview.}
-
-            \textbf{Stage 1: DQN critic pretraining.}
-            Train a CoLight-based DQN critic that estimates per-phase action values from graph-structured traffic observations.
-
-            \textbf{Stage 2: DGLight fine-tuning.}
-            (1) Convert each intersection state into a textual prompt.
-            (2) Sample $k$ candidate responses from the LLM.
-            (3) Parse each response into a signal phase.
-            (4) Query the frozen critic for per-action $Q$-values.
-            (5) Score the sampled candidates and execute the best sampled action in CityFlow.
-            (6) Store prompt--score records for all intersections and time steps.
-            (7) Run GRPO on the collected records to update the LLM policy.
-        }
-    }
-    \caption{Overview of the two-stage \textit{DGLight} pipeline. An alternative joint-scored comparison variant is described separately in Appendix~\ref{appendix:joint_scored_grpo}.}
+    \includegraphics[width=1\linewidth]{dglight-archi.png}
+    \caption{Overview of the two-stage \textit{DGLight} pipeline.}
     \label{fig:dglight_pipeline}
 \end{figure}
 
 \subsection{Pretraining the CoLight-Based DQN Critic}
 The critic used in \textit{DGLight} is based on \textit{CoLight} \cite{10.1145/3357384.3357902}, a graph-attentive deep Q-learning model for network-level traffic signal control. \textit{CoLight} is employed as a pretrained value estimator so that the subsequent GRPO stage can query a traffic-aware action-value function rather than rely exclusively on the raw environment reward. Given the current environment state, the critic predicts action values for each intersection and thereby provides a dense estimate of the quality of candidate signal phases under the prevailing traffic situation.
 
-The \textit{CoLight} critic is composed of three main components as illustrated in Figure~\ref{fig:dglight_critic_architecture}. The first component is an observation embedding module that transforms the local traffic state of each intersection into a latent feature representation. The second component consists of one or more multi-head graph-attention layers, which propagate information across neighboring intersections and produce attention-weighted network representations. The final component is a Q-value prediction layer that maps the aggregated features to one scalar value for each admissible signal phase. This architecture combines local state encoding, inter-intersection coordination, and value-based action estimation within a single model.
+The \textit{CoLight} critic is composed of three main components. The first component is an observation embedding module that transforms the local traffic state of each intersection into a latent feature representation. The second component consists of one or more multi-head graph-attention layers, which propagate information across neighboring intersections and produce attention-weighted network representations. The final component is a Q-value prediction layer that maps the aggregated features to one scalar value for each admissible signal phase. This architecture combines local state encoding, inter-intersection coordination, and value-based action estimation within a single model.
 
-\begin{figure}[t]
-    \centering
-    \fbox{
-        \parbox{0.88\linewidth}{
-            \textbf{Critic architecture placeholder.}
+% \begin{figure}[t]
+%     \centering
+%     \fbox{
+%         \parbox{0.88\linewidth}{
+%             \textbf{Critic architecture placeholder.}
 
-            Replace this box with a figure showing:
-            local traffic observations $\rightarrow$ observation embedding layers
-            $\rightarrow$ graph attention over neighboring intersections
-            $\rightarrow$ per-phase Q-value prediction head.
-        }
-    }
-    \caption{Mockup placeholder for the \textit{CoLight}-based DQN critic architecture used in \textit{DGLight}.}
-    \label{fig:dglight_critic_architecture}
-\end{figure}
+%             Replace this box with a figure showing:
+%             local traffic observations $\rightarrow$ observation embedding layers
+%             $\rightarrow$ graph attention over neighboring intersections
+%             $\rightarrow$ per-phase Q-value prediction head.
+%         }
+%     }
+%     \caption{Mockup placeholder for the \textit{CoLight}-based DQN critic architecture used in \textit{DGLight}.}
+%     \label{fig:dglight_critic_architecture}
+% \end{figure}
 
 Training follows the standard value-based reinforcement learning procedure. The model interacts with the traffic environment to collect state transitions, actions, rewards, and subsequent states ($(s,a,r,s')$), where the stepwise reward is defined to be inversely proportional to queue lengths at each intersection. These transitions are stored in replay memory for off-policy updates. The optimization objective minimizes the Bellman error
 \[
