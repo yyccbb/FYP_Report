@@ -213,7 +213,7 @@ This ablation isolates two sources of improvement: traffic-specific LLM adaptati
 
 \begin{table}[t]
     \centering
-    \caption{Ablation study comparing the untuned base model, \textit{LightGPT}, and \textit{DGLight}. Fill in the final values after evaluation. Lower values are better.}
+    \caption{Ablation study comparing the untuned base model, \textit{LightGPT}, and successive \textit{DGLight} checkpoints. Lower values are better. Best and second-best values are highlighted in bold and underlined, respectively.}
     \label{tab:ablation}
     \resizebox{\textwidth}{!}{%
     \begin{tabular}{lccccccccccccccc}
@@ -224,10 +224,13 @@ This ablation isolates two sources of improvement: traffic-specific LLM adaptati
         \cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10} \cmidrule(lr){11-13} \cmidrule(lr){14-16}
         & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT & ATT & AQL & AWT \\
         \midrule
-        Llama3-8b &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
-        LightGPT (Llama3-8b) &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
-        DGLight (Llama3-8b) &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
+        Llama3-8b & 1064.16 & 1346.71 & 804.81 & 1173.01 & 1068.65 & 811.28 & 1077.41 & 1176.40 & 823.16 & 1090.97 & 610.32 & 728.08 & 728.00 & 711.15 & 575.44 \\
+        LightGPT (Llama3-8b) & 277.38 & 164.60 & 48.68 & 270.14 & 103.77 & 44.10 & \underline{262.67} & \underline{130.65} & 44.98 & \underline{316.12} & \textbf{61.02} & \textbf{53.84} & \underline{333.95} & \textbf{190.91} & 72.57 \\
+        DGLight-iter0 (LightGPT) & \textbf{275.62} & \textbf{162.38} & \textbf{47.16} & \textbf{268.61} & \textbf{102.25} & \textbf{43.31} & \underline{262.37} & 130.72 & \underline{44.40} & \textbf{316.09} & 61.26 & 58.47 & 334.40 & 191.65 & \textbf{69.02} \\
+        DGLight-iter1 (LightGPT) & \underline{275.92} & \underline{162.64} & \underline{47.17} & \underline{269.68} & \underline{103.51} & \underline{43.78} & \textbf{262.16} & \textbf{129.77} & \textbf{43.53} & 316.59 & \underline{61.08} & \underline{54.43} & \textbf{333.14} & \underline{191.61} & \underline{70.63} \\
         \bottomrule
     \end{tabular}%
     }
 \end{table}
+
+Here, \textit{DGLight-iter0} denotes the model after one round of rollout collection followed by one round of GRPO optimization, while \textit{DGLight-iter1} denotes the model after two such rounds. The ablation shows a clear overall trend: moving from the untuned \textit{Llama3-8b} model to \textit{LightGPT} yields the largest improvement, confirming the value of traffic-specific adaptation, and critic-guided GRPO then provides additional gains beyond the inherited \textit{LightGPT} checkpoint. The comparison between \textit{DGLight-iter0} and \textit{DGLight-iter1} suggests that the first round already captures most of the improvement, while the second round produces smaller and more mixed changes that mainly refine an already strong policy.
