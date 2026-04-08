@@ -1,5 +1,5 @@
 \section{Methodology}
-This section introduces \textit{DGLight}, a two-stage reinforcement-learning pipeline for adapting a pretrained large language model to traffic signal control. In the first stage, a CoLight-based DQN critic is trained to estimate action values for signal-phase decisions when provided with structured environment states. In the second stage, the frozen critic scores candidate LLM responses during rollout and the scores are used as the reward signal for GRPO-based policy optimization.
+This section introduces \textit{DGLight}, a two-stage reinforcement-learning pipeline for adapting a pretrained large language model to traffic signal control. In the first stage, a CoLight-based DQN critic is trained to estimate action values for signal-phase decisions when provided with structured environment states. In the second stage, the frozen critic scores candidate LLM responses during rollout and the scores are used as the reward signal for GRPO-based policy optimization. Refer to Figure~\ref{fig:dglight_pipeline} for the pipeline architecture.
 
 \begin{figure}[t]
     \centering
@@ -104,20 +104,45 @@ where $a(y)$ denotes the parsed action of completion $y$. The resulting reward v
 This optimizer is particularly well suited to the present setting because it provides a natural way to train an LLM using reward signals from an already established value-based traffic-control critic. For a single traffic prompt, multiple completions can be sampled efficiently, parsed into candidate signal phases, and scored by the frozen DQN critic, after which GRPO uses the relative critic rewards within the sampled group to improve the policy. This way, critic-guided GRPO transfers decision-making knowledge from the value-based controller into the LLM. Although the critic is trained on traffic data from a specific city, the LLM is not fine-tuned to overfit any single city. Rather, it is trained to have stronger reasoning patterns for mapping textual traffic states to better signal actions. This strengthens the model's traffic decision-making capacity while preserving transferability.
 
 \subsection{End-to-End DGLight Training Procedure}
-The complete training loop can be summarized as follows:
-\begin{enumerate}
-    \item Pretrain the CoLight-based DQN critic.
-    \item Freeze the critic checkpoint for downstream use in \textit{DGLight}.
-    \item Reset the CityFlow environment and build one textual prompt for each active intersection.
-    \item Sample $k$ candidate responses from the LLM for every prompt.
-    \item Parse each response into a discrete signal phase.
-    \item Query the frozen critic to obtain per-action $Q$-values for the current traffic state.
-    \item Score the sampled responses according to their parsed actions and execute the best sampled action at each intersection.
-    \item Store the prompt together with the full per-action score vector as a GRPO training record.
-    \item Repeat the above process for the full rollout episode, then fine-tune the policy on the collected records with GRPO.
-\end{enumerate}
+Algorithm~\ref{alg:dglight_training} summarizes the complete \textit{DGLight} training loop.
 
-In practice, the two stages are decoupled. The critic is first trained offline as a CoLight-based DQN value estimator, and the resulting checkpoint is then reused as a fixed evaluator during LLM fine-tuning. Exact hyperparameter settings, model sizes, rollout lengths, and dataset configurations are deferred to the experimental section.
+\begin{algorithm}[h]
+    \caption{End-to-end \textit{DGLight} training}
+    \label{alg:dglight_training}
+    \begin{algorithmic}[1]
+        \Require traffic environment $\mathcal{E}$, pretrained LLM policy $\pi_\theta$, critic architecture $Q_\phi$, candidate count $k$, invalid-action reward $r_{\mathrm{invalid}}$
+        \State Train the CoLight-based DQN critic $Q_\phi$ on traffic transitions
+        \State Freeze critic parameters $\phi$
+        \For{each policy-training episode}
+            \State Reset environment $\mathcal{E}$
+            \State Initialize empty GRPO record set $\mathcal{D}_{\mathrm{GRPO}}$
+            \While{the rollout episode is not finished}
+                \State Initialize empty executed action set $\hat{\mathbf{a}}_t$
+                \For{each active intersection $i$}
+                    \State Construct textual prompt $x_{i,t}$ from the current traffic state $s_{i,t}$
+                    \State Sample candidate responses $\{y_{i,t}^{(1)}, \dots, y_{i,t}^{(k)}\} \sim \pi_\theta(\cdot \mid x_{i,t})$
+                    \State Parse each response into a signal phase $a_{i,t}^{(j)} \gets \operatorname{Parse}(y_{i,t}^{(j)})$
+                    \State Query the frozen critic to obtain per-action values $\mathbf{q}_{i,t} \gets [Q_\phi(s_{i,t}, a)]_{a \in A}$
+                    \For{each sampled response $j \in \{1,\dots,k\}$}
+                        \If{$a_{i,t}^{(j)} \in A$}
+                            \State $r_{i,t}^{(j)} \gets Q_\phi(s_{i,t}, a_{i,t}^{(j)})$
+                        \Else
+                            \State $r_{i,t}^{(j)} \gets r_{\mathrm{invalid}}$
+                        \EndIf
+                    \EndFor
+                    \State $j_{i,t}^{*} \gets \arg\max_j r_{i,t}^{(j)}$
+                    \State $\hat{a}_{i,t} \gets a_{i,t}^{(j_{i,t}^{*})}$ and add $\hat{a}_{i,t}$ to $\hat{\mathbf{a}}_t$
+                    \State Store $(x_{i,t}, \mathbf{q}_{i,t})$ in $\mathcal{D}_{\mathrm{GRPO}}$
+                \EndFor
+                \State Step the environment with joint action set $\hat{\mathbf{a}}_t$
+            \EndWhile
+            \State Fine-tune policy $\pi_\theta$ on $\mathcal{D}_{\mathrm{GRPO}}$ with GRPO
+        \EndFor
+        \State \Return adapted policy $\pi_\theta$
+    \end{algorithmic}
+\end{algorithm}
+
+In practice, the rollout collection and GRPO optimization stages are decoupled. A full rollout episode is first collected with the frozen critic, and the resulting prompt-score records are then used as a separate training set for the subsequent GRPO update. This separation enables finer-grained optimization, since multiple manual updates can be performed on the same episodic rollout data.
 
 \subsection{Comparison Variant}
 For completeness, I also implemented a \textit{Joint-Scored GRPO (JS-GRPO)} variant as a comparison method. Instead of using direct critic $Q$-values to score sampled actions, that variant estimates action quality indirectly from short-horizon joint rollout returns over snapshot-forked simulations, and then projects those returns back to per-intersection action scores for GRPO training. Because this variant is included only to test whether indirect joint scoring can outperform direct critic guidance, I do not treat it as a co-equal methodological contribution in the main text. Its detailed design is provided separately in Appendix~\ref{appendix:joint_scored_grpo}.
